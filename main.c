@@ -8,33 +8,18 @@
 #include <GL/glew.h>
 #include <GL/gl.h>
 #include <GL/glu.h>
-#include "gl-matrix.h"
-#include "chroma.h"
-#include "chromagl.h"
+#include "glcommon.h"
 
-int screenWidth = 1024;
-int screenHeight = 768;
+SDL_Window *mainWindowSDL;
+SDL_GLContext glContextSDL;
+SDL_Thread *appThreadSDL;
 
-SDL_Window *window;
-SDL_GLContext glcontext;
-SDL_Thread *renderThread;
-volatile bool quitApp = false;
 volatile bool running = true;
+volatile bool quitApp = false;
 volatile bool shouldSwitchVsync = false;
 volatile bool shouldResize = false;
-SDL_mutex *mutex;
 
-float identityMatrix[] = {
-	1.0, 0.0, 0.0, 0.0,
-	0.0, 1.0, 0.0, 0.0,
-	0.0, 0.0, 1.0, 0.0,
-	0.0, 0.0, 0.0, 1.0
-};
-
-float projectionMatrix[16] = {0.0};
-
-
-void oglDebugError(unsigned int source, unsigned int type, unsigned int id, unsigned int severity, int length, const char *message, const void *userparam) {
+void oglDebugMessage(unsigned int source, unsigned int type, unsigned int id, unsigned int severity, int length, const char *message, const void *userparam) {
 	// opengl error from ARB_DEBUG_OUTPUT
 	SDL_Log("OpenGL Error: %s", message);
 }
@@ -74,14 +59,14 @@ void toggleSwapInterval() {
 }
 
 void toggleFullscreen() {
-	int windowFlags = SDL_GetWindowFlags(window);
+	int windowFlags = SDL_GetWindowFlags(mainWindowSDL);
 	if (windowFlags & SDL_WINDOW_FULLSCREEN_DESKTOP) {
 		// fullscreen on -> switch off
-		SDL_SetWindowFullscreen(window, 0);
+		SDL_SetWindowFullscreen(mainWindowSDL, 0);
 		SDL_ShowCursor(SDL_ENABLE);
 	} else {
 		// fullscreen off -> switch on
-		SDL_SetWindowFullscreen(window, SDL_WINDOW_FULLSCREEN_DESKTOP);
+		SDL_SetWindowFullscreen(mainWindowSDL, SDL_WINDOW_FULLSCREEN_DESKTOP);
 		SDL_ShowCursor(SDL_DISABLE);
 	}
 }
@@ -90,13 +75,13 @@ void toggleFullscreen() {
 void initGL() {
 
 	// create openGL context
-	glcontext = SDL_GL_CreateContext(window);
-	if (glcontext == NULL) {SDL_Log("GL context fail: %s", SDL_GetError()); exit(1);}
+	glContextSDL = SDL_GL_CreateContext(mainWindowSDL);
+	if (glContextSDL == NULL) {SDL_Log("GL context fail: %s", SDL_GetError()); exit(1);}
 	SDL_Log("OpenGL %s\n", glGetString(GL_VERSION));
 	SDL_Log("GLSL %s\n", glGetString(GL_SHADING_LANGUAGE_VERSION));
 	SDL_Log("Renderer %s\n", glGetString(GL_RENDERER));
 
-	// load openGL func pointers
+	// load openGL function pointers
 	GLenum glewStatus = glewInit();
 	if (glewStatus != GLEW_OK) {
 		SDL_Log("GLEW failed: %s", glewGetErrorString(glewStatus));
@@ -104,45 +89,23 @@ void initGL() {
 	}
 	SDL_Log("GLEW %s\n", glewGetString(GLEW_VERSION));
 
+#ifdef DEBUG
+	glDebugMessageCallbackARB(oglDebugMessage, NULL);
+#endif
+
 	// try to enable adaptive vsync or normal vsync
 	int swapSuccess = SDL_GL_SetSwapInterval(-1);
 	if (swapSuccess == -1) SDL_GL_SetSwapInterval(1);
 
-	glHint(GL_LINE_SMOOTH_HINT, GL_NICEST);
-	glHint(GL_POLYGON_SMOOTH_HINT, GL_NICEST);
+	init();
 
-	// set initial gl feature state
-	glViewport(0, 0, screenWidth, screenHeight);
-	glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-	glEnable(GL_BLEND);
-	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-	//glEnable(GL_MULTISAMPLE);
-
-	// clear the framebuffer before showing the window
-	glClear(GL_COLOR_BUFFER_BIT);
-	SDL_GL_SwapWindow(window);
-	SDL_ShowWindow(window);
-	SDL_RaiseWindow(window);
-
-#ifdef DEBUG
-	glDebugMessageCallbackARB(oglDebugError, NULL);
-#endif
-
-	initChromaGL();
+	SDL_GL_SwapWindow(mainWindowSDL);
+	SDL_ShowWindow(mainWindowSDL);
+	SDL_RaiseWindow(mainWindowSDL);
 
 }
 
-void draw(int screenWidth, int screenHeight) {
-
-	glViewport(0, 0, screenWidth, screenHeight);
-
-	//drawChromaGL(screenWidth, screenHeight, orthographic, matrixFlip);
-	drawChromaGL(screenWidth, screenHeight, projectionMatrix, identityMatrix);
-
-	SDL_GL_SwapWindow(window);
-}
-
-int renderMain(void *data) {
+int AppThreadMainSDL(void *data) {
 	//SDL_Log("renderMain start");
 	initGL();
 	int ctx=0;
@@ -158,8 +121,9 @@ int renderMain(void *data) {
 
 		if (running) {
 			//SDL_Log("Draw Frame %d", ctx++);
-			updateLines(dt, screenWidth, screenHeight);
-			draw(screenWidth, screenHeight);
+			update(dt);
+			draw();
+			SDL_GL_SwapWindow(mainWindowSDL);
 		} else {
 			//SDL_Log("Sleep Frame %d", ctx++);
 			SDL_Delay(100);
@@ -169,39 +133,28 @@ int renderMain(void *data) {
 			toggleSwapInterval();
 		}
 
-		SDL_LockMutex(mutex);
 		if (shouldResize) {
 			shouldResize = false;
 			//SDL_Log("------ to %dx%d", screenWidth, screenHeight);
-			mat4_ortho(0, screenWidth, screenHeight, 0, 0, 200, projectionMatrix);
-			prepareLines(screenWidth, screenHeight);
-			draw(screenWidth, screenHeight);
+			resize(screenWidth, screenHeight);
+			draw();
+			SDL_GL_SwapWindow(mainWindowSDL);
 		}
-		SDL_UnlockMutex(mutex);
-
 
 		if (quitApp) {
 			//SDL_Log("renderMain quit");
-			SDL_GL_DeleteContext(glcontext);
+			SDL_GL_DeleteContext(glContextSDL);
 			return 0;
 		}
 	}
 }
 
-void resize(int width, int height) {
-	SDL_LockMutex(mutex);
-	screenWidth = width;
-	screenHeight = height; 
-	shouldResize = true;
-	//SDL_Log("Resize to %dx%d", screenWidth, screenHeight);
-	SDL_UnlockMutex(mutex);
-}
-
 int eventFilter(void *userdata, SDL_Event *event) {
 	if (event->type == SDL_WINDOWEVENT && event->window.event == SDL_WINDOWEVENT_RESIZED) {
-		//screenWidth = event->window.data1;
-		//screenHeight = event->window.data2;
-		resize(event->window.data1, event->window.data2);
+		screenWidth = event->window.data1;
+		screenHeight = event->window.data2;
+		shouldResize = true;
+		while (shouldResize);
 		return 0;
 	}
 	return 1;
@@ -245,21 +198,7 @@ void handleEvents() {
 
 void startup()
 {
-	// seed random numbers
-	srand(time(NULL));
-
-	// init chroma lines
-	prepareLines(screenWidth, screenHeight);
-	// generate inital color gradient sets
-	coolColors(true);
-	coolColors(false);
-
-	// setup camera
-	//mat4_frustum(0, 40, 40, 0, 10, 200, perp);
-	mat4_ortho(0, screenWidth, screenHeight, 0, 0, 200, projectionMatrix);
-	//mat4_rotateZ(perp, -M_PI, NULL);
-	//float transs[] = {-screenWidth, -screenHeight, 0};
-	//mat4_translate(perp, transs, NULL);
+	startupCommon();
 
 	SDL_Log("Chroma Drencher 1.0");
 
@@ -286,11 +225,10 @@ void startup()
 
 	// create window
 	const char *windowName = "Chroma Drencher";
-	window = SDL_CreateWindow(windowName, 800, 100, screenWidth, screenHeight,
+	mainWindowSDL = SDL_CreateWindow(windowName, 800, 100, screenWidth, screenHeight,
 		SDL_WINDOW_OPENGL|SDL_WINDOW_RESIZABLE|SDL_WINDOW_HIDDEN);
 
-	mutex = SDL_CreateMutex();
-	renderThread = SDL_CreateThread(renderMain, "RenderThread", NULL);
+	appThreadSDL = SDL_CreateThread(AppThreadMainSDL, "ApplicationThread", NULL);
 }
 
 void run()
@@ -302,14 +240,13 @@ void run()
 		SDL_Delay(1);
 		handleEvents();
 	}
-	int renderThreadReturnVal;
-	SDL_WaitThread(renderThread, &renderThreadReturnVal);
+	int appThreadReturnVal;
+	SDL_WaitThread(appThreadSDL, &appThreadReturnVal);
 	//SDL_Log("Main quit");
 }
 
 void shutdown() {
-	SDL_DestroyWindow(window);
-	SDL_DestroyMutex(mutex);
+	SDL_DestroyWindow(mainWindowSDL);
 }
 
 int main(int argc, char **argv)
