@@ -6,8 +6,7 @@
 #include <GL/gl.h>
 #include <GL/glu.h>
 #include "chroma.h"
-
-GLuint makeShader(const char *source, GLenum type);
+#include "util.h"
 
 // attribute and uniform location defines
 #define ATB_POSITION 0

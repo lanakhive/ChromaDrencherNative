@@ -1,10 +1,9 @@
 #ifndef CHROMA_H
 #define CHROMA_H
 
-void blockAlloc(int newCount, int *oldCount, int itemSize, void **buffer);
-
 #include <stdbool.h>
 #include <stdlib.h>
+#include "util.h"
 
 typedef struct lineStruct {
 	float x;

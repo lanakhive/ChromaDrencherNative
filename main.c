@@ -33,41 +33,10 @@ float identityMatrix[] = {
 
 float projectionMatrix[16] = {0.0};
 
-void blockAlloc(int newCount, int *oldCount, int itemSize, void **buffer) {
-	if (*oldCount > 0) free(*buffer);
-	const unsigned int block = 1024;
-	int newItems = ceil(newCount/(float)block)*block;
-	int allocBytes = itemSize*newItems;
-	*buffer = malloc(allocBytes);
-	if (*buffer == NULL) {SDL_Log("Alloc Failed."); exit(1);}
-	*oldCount = newItems;
-	//SDL_Log("Alloc: %d items, %d bytes", newItems, allocBytes);
-}
 
 void oglDebugError(unsigned int source, unsigned int type, unsigned int id, unsigned int severity, int length, const char *message, const void *userparam) {
 	// opengl error from ARB_DEBUG_OUTPUT
 	SDL_Log("OpenGL Error: %s", message);
-}
-
-GLuint makeShader(const char *source, GLenum type) {
-	GLuint shader = glCreateShader(type);
-	glShaderSource(shader, 1, &source, NULL);
-	glCompileShader(shader);
-	GLint status;
-	glGetShaderiv(shader, GL_COMPILE_STATUS, &status);
-	if (status == GL_TRUE) {
-		//SDL_Log("Shader compile successful.");
-		return shader;
-	} else {
-		//GLint maxLength = 0;
-		//glGetShaderiv(vertexShader, GL_INFO_LOG_LENGTH, &maxLength);
-		char buf[513];
-		glGetShaderInfoLog(shader, 512, NULL, buf);
-		SDL_Log("Shader compile failed:\n%s", buf);
-		glDeleteShader(shader);
-		exit(1);
-	}
-	return 0;
 }
 
 void toggleSwapInterval() {
