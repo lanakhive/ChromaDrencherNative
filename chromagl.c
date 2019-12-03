@@ -31,6 +31,11 @@ const char *fgshad =
 	"layout(location = 8) uniform vec3 acolor1[5];"
 	"layout(location = 13) uniform vec3 acolor2[5];"
 	"float map(float v, float f1, float f2, float t1, float t2) { return (v-f1)*(t2-t1)/(f2-f1);}"
+
+	"float min( vec3 a ) { return min( a.x, min( a.y, a.z ) ); }"
+	"float max( vec3 a ) { return max( a.x, max( a.y, a.z ) ); }"
+	"vec3 mixa( vec3 col1, vec3 col2, float gradient ) { float m = ( max( col1 ) + max( col2 ) ) / 2.; vec3 c = ( col1 + col2 ) * .5; float d = 2. * abs( gradient - .5 ) * min( c ); c = ( c - d ) / ( 1. - d ); c *= m / max( c ); float s = step( .5, gradient ); gradient *= 2.; return ( 1. - s ) * mix( col1, c, gradient ) + s * mix( c, col2, gradient - 1. ); }"	
+
 	"void main() {"
 	"FragColor = vacolor;"
 	"FragColor.a *= op;"
@@ -46,7 +51,7 @@ const char *fgshad =
 	"color2 = mix(color2,acolor2[2], smoothstep(div2, div2*2.0, x));"
 	"color2 = mix(color2,acolor2[3], smoothstep(div2*2.0, div2*3.0, x));"
 	"color2 = mix(color2,acolor2[4], smoothstep(div2*3.0, div2*4.0, x));"
-	"FragColor *= vec4(mix(color1/255.0, color2/255.0, ablend), 1.0);"
+	"FragColor *= vec4(mixa(color1/255.0, color2/255.0, ablend), 1.0);"
 	"float qq = clamp(map(vacolor.a,tipFrac,1.0,0.0,1.0),0.0,1.0);"
 	//"if (op > (200.0/255.0) && vacolor.a > (tipFrac)) {"
 	//"float condition = max(sign(op - (200.0/255.0)), 0.0) * max(sign(vacolor.a-tipFrac), 0.0);"
