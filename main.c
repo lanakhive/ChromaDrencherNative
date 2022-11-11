@@ -119,13 +119,8 @@ int AppThreadMainSDL(void *data) {
 		if (dt > 1.0) dt = 0.1;
 
 		if (running) {
-			//SDL_Log("Draw Frame %d", ctx++);
 			update(dt);
 			draw();
-			SDL_GL_SwapWindow(mainWindowSDL);
-		} else {
-			//SDL_Log("Sleep Frame %d", ctx++);
-			SDL_Delay(100);
 		}
 		if (shouldSwitchVsync) {
 			shouldSwitchVsync = false;
@@ -137,7 +132,6 @@ int AppThreadMainSDL(void *data) {
 			//SDL_Log("------ to %dx%d", screenWidth, screenHeight);
 			resize(screenWidth, screenHeight);
 			draw();
-			SDL_GL_SwapWindow(mainWindowSDL);
 		}
 
 		if (quitApp) {
@@ -145,6 +139,9 @@ int AppThreadMainSDL(void *data) {
 			SDL_GL_DeleteContext(glContextSDL);
 			return 0;
 		}
+
+		SDL_GL_SwapWindow(mainWindowSDL);
+
 	}
 }
 
