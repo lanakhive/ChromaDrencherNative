@@ -37,7 +37,7 @@ extern GLuint bufferOffset;
 
 void initChromaGL();
 
-void drawChromaGL();
+void drawChromaGL(int screenWidth, int screenHeight, float *proMatrix, float *mvMatrix);
 
 void serializeLineList();
 
